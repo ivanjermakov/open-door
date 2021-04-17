@@ -25,15 +25,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   case WStype_TEXT:
     USE_SERIAL.printf("[WSc] get text: %s\n", payload);
 
-    // send message to server
-    // webSocket.sendTXT("message here");
-    break;
-  case WStype_BIN:
-    USE_SERIAL.printf("[WSc] get binary length: %u\n", length);
-    hexdump(payload, length);
-
-    // send data to server
-    // webSocket.sendBIN(payload, length);
+     // send message to server
+     webSocket.sendTXT("opened");
     break;
   case WStype_PING:
     // pong will be send automatically
@@ -58,7 +51,7 @@ void setup() {
     delay(1000);
   }
 
-  WiFiMulti.addAP("SSID", "passpasspass");
+  WiFiMulti.addAP("Zx2", "11111111?");
 
   //WiFi.disconnect();
   while (WiFiMulti.run() != WL_CONNECTED) {
@@ -66,7 +59,7 @@ void setup() {
   }
 
   // server address, port and URL
-  webSocket.begin("192.168.0.123", 81, "/");
+  webSocket.begin("192.168.100.5", 3000, "/");
 
   // event handler
   webSocket.onEvent(webSocketEvent);

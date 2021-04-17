@@ -1,56 +1,83 @@
-import express from "express"
+import express, {Request, Response} from "express"
 import {v4} from 'uuid'
-import ws from "ws"
 import basicAuth from "express-basic-auth"
+import * as url from "url";
+import {WsServer} from "./WsServer";
+import WebSocket from "ws";
 
-const numberOfEntrances = 8
 const httpServer = express()
-const clients: Map<string, ws> = new Map<string, ws>()
+const servers: Map<string, WsServer> = new Map<string, WsServer>()
 const basic = basicAuth({
 	users: {admin: 'admin'},
 	challenge: true
 })
 
-httpServer.get('/:n', basic, (request, response) => {
-	console.log(`Received request for ${request.url}`)
-	const n: number = Number(request.params.n)
-	console.log(`Number: ${n}`)
-	if (n && n > 0 && n <= numberOfEntrances) {
-		broadcast(n.toString())
-		response.writeHead(200)
-		response.write('Opened')
+httpServer.get('/status/:id', basic, (request: Request, response: Response) => {
+	response
+		.status(200)
+		.json(
+			Array.from(servers.keys()).filter((path: string) => path.startsWith(`/${request.params.id}`))
+		)
+})
+
+httpServer.get('/:id/:n', basic, (request: Request, response: Response) => {
+	log(`Received request for ${request.url}`)
+	const existingServer = servers.get(request.path);
+	if (existingServer) {
+		broadcast(request.path)
+		log(`Opening ${request.path}`)
+		response.status(200).write('Opened')
 	} else {
-		response.writeHead(400)
-		response.write('Invalid entrance number')
+		log(`No active on ${request.path}`)
+		response.status(400).write(`No active clients on socket ${request.path}`)
 	}
 	response.end()
-}).listen(() => console.log(`Http server on port 8080, ws on 3000`))
+}).listen(() => log(`Http server on port 8080, ws on 3000`))
 
 httpServer.listen(8080)
 
-const wsServer = new ws.Server({noServer: true})
-wsServer.on('connection', client => {
-	const id = generateId()
-	console.log(`Client connected: ${id}`)
-	clients.set(id, client)
-	console.log(`Active connections: ${clients.size}`)
-	client.on('message', message => console.log(message))
-	client.on('close', () => {
-		console.log(`Client disconnected: ${id}`)
-		clients.delete(id)
-		console.log(`Active connections: ${clients.size}`)
-	})
-})
-
 const server = httpServer.listen(3000)
 server.on('upgrade', (request, socket, head) => {
-	wsServer.handleUpgrade(request, socket, head, socket => {
-		wsServer.emit('connection', socket, request)
+	const path = url.parse(request.url).pathname;
+	const wsServer: WsServer = wsServerFactory(path!);
+	wsServer.server.handleUpgrade(request, socket, head, socket => {
+		wsServer.server.emit('connection', socket, request)
 	})
+	servers.set(path!, wsServer)
 })
 
-const broadcast = (message: string) => {
-	clients.forEach(c => c.send(message))
+const wsServerFactory = (path: string): WsServer => {
+	const existingServer = servers.get(path);
+	if (existingServer) {
+		return existingServer
+	}
+
+	const wsServer: WebSocket.Server = new WebSocket.Server({noServer: true})
+	let clients: Map<string, WebSocket> = new Map<string, WebSocket>()
+	wsServer.on('connection', client => {
+		log(`Client connected on: ${path}`)
+		const id = generateId()
+		clients.set(id, client)
+		log(`Active connections on ${path}: ${clients.size}`)
+		client.on('message', message => log(message))
+		client.on('close', () => {
+			log(`Client disconnected: ${path}`)
+			clients.delete(id)
+			log(`Active connections: ${clients.size}`)
+			if (clients.size === 0) {
+				log(`WsServer on ${path} has no clients, deleting`)
+				servers.delete(path)
+			}
+		})
+	})
+	return new WsServer(wsServer, clients)
 }
 
-const generateId = () => v4().substr(0, 8)
+const broadcast = (path: string) => {
+	log(`broadcasting: ${path}`)
+	return servers.get(path)?.clients.forEach(c => c.send('open'));
+}
+
+const generateId = (): string => v4().substr(0, 8)
+
+const log = (message: any): void => console.log(`${new Date()} ${message.toString()}`)
