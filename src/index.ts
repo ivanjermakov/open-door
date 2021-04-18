@@ -54,12 +54,13 @@ const wsServerFactory = (path: string): WsServer => {
 
 	const wsServer: WebSocket.Server = new WebSocket.Server({noServer: true})
 	let clients: Map<string, WebSocket> = new Map<string, WebSocket>()
-	wsServer.on('connection', client => {
+	wsServer.on('connection', (client: any) => {
 		log(`Client connected on: ${path}`)
+		client.isAlive = true
 		const id = generateId()
 		clients.set(id, client)
 		log(`Active connections on ${path}: ${clients.size}`)
-		client.on('message', message => log(message))
+		client.on('message', (message: string) => log(message))
 		client.on('close', () => {
 			log(`Client disconnected: ${path}`)
 			clients.delete(id)
@@ -69,8 +70,12 @@ const wsServerFactory = (path: string): WsServer => {
 				servers.delete(path)
 			}
 		})
+		client.on('pong', () => {
+			log(`client ${path} responded with PONG`)
+			client.isAlive = true;
+		})
 	})
-	return new WsServer(wsServer, clients)
+	return new WsServer(path, wsServer, clients)
 }
 
 const broadcast = (path: string) => {
@@ -78,6 +83,19 @@ const broadcast = (path: string) => {
 	return servers.get(path)?.clients.forEach(c => c.send('open'));
 }
 
-const generateId = (): string => v4().substr(0, 8)
+const generateId = (): string => v4().substr(0, 8);
 
 const log = (message: any): void => console.log(`${new Date()} ${message.toString()}`)
+
+setInterval(() => {
+	Array.from(servers.values()).forEach((wsServer: WsServer) => {
+		wsServer.clients.forEach((client: any) => {
+			if (client.isAlive === false) {
+				log(`no answer from client ${wsServer.path}, terminating...`)
+				client.terminate()
+			}
+			client.isAlive = false
+			client.ping()
+		})
+	})
+}, 10 * 1000)

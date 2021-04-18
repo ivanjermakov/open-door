@@ -1,11 +1,13 @@
-import WebSocket from "ws";
+import WebSocket from "ws"
 
 export class WsServer {
 	server: WebSocket.Server
 	clients: Map<string, WebSocket>
+	path: string
 
-	constructor(server: WebSocket.Server, clients: Map<string, WebSocket>) {
-		this.server = server;
-		this.clients = clients;
+	constructor(path: string, server: WebSocket.Server, clients: Map<string, WebSocket>) {
+		this.path = path
+		this.server = server
+		this.clients = clients
 	}
 }
