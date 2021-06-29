@@ -1,9 +1,12 @@
-import express, {Request, Response} from "express"
+import express, {Request, Response} from 'express'
 import {v4} from 'uuid'
-import basicAuth from "express-basic-auth"
-import * as url from "url";
-import {WsServer} from "./WsServer";
-import WebSocket from "ws";
+import basicAuth from 'express-basic-auth'
+import * as url from 'url'
+import {WsServer} from './WsServer'
+import WebSocket from 'ws'
+
+const HTTP_PORT = 8081
+const WS_PORT = 3001
 
 const httpServer = express()
 const servers: Map<string, WsServer> = new Map<string, WsServer>()
@@ -12,7 +15,7 @@ const basic = basicAuth({
 	challenge: true
 })
 
-httpServer.get('/status/:id', basic, (request: Request, response: Response) => {
+httpServer.get(`/status/:id`, basic, (request: Request, response: Response) => {
 	response
 		.status(200)
 		.json(
@@ -20,9 +23,9 @@ httpServer.get('/status/:id', basic, (request: Request, response: Response) => {
 		)
 })
 
-httpServer.get('/:id/:n', basic, (request: Request, response: Response) => {
+httpServer.get(`/:id/:n`, basic, (request: Request, response: Response) => {
 	log(`Received request for ${request.url}`)
-	const existingServer = servers.get(request.path);
+	const existingServer = servers.get(request.path)
 	if (existingServer) {
 		broadcast(request.path)
 		log(`Opening ${request.path}`)
@@ -32,14 +35,14 @@ httpServer.get('/:id/:n', basic, (request: Request, response: Response) => {
 		response.status(400).write(`No active clients on socket ${request.path}`)
 	}
 	response.end()
-}).listen(() => log(`Http server on port 8080, ws on 3000`))
+}).listen(() => log(`Http server on port ${HTTP_PORT}, ws on ${WS_PORT}`))
 
-httpServer.listen(8080)
+httpServer.listen(HTTP_PORT)
 
-const server = httpServer.listen(3000)
+const server = httpServer.listen(WS_PORT)
 server.on('upgrade', (request, socket, head) => {
-	const path = url.parse(request.url).pathname;
-	const wsServer: WsServer = wsServerFactory(path!);
+	const path = url.parse(request.url).pathname
+	const wsServer: WsServer = wsServerFactory(path!)
 	wsServer.server.handleUpgrade(request, socket, head, socket => {
 		wsServer.server.emit('connection', socket, request)
 	})
@@ -47,7 +50,7 @@ server.on('upgrade', (request, socket, head) => {
 })
 
 const wsServerFactory = (path: string): WsServer => {
-	const existingServer = servers.get(path);
+	const existingServer = servers.get(path)
 	if (existingServer) {
 		return existingServer
 	}
@@ -71,8 +74,8 @@ const wsServerFactory = (path: string): WsServer => {
 			}
 		})
 		client.on('pong', () => {
-			log(`client ${path} responded with PONG`)
-			client.isAlive = true;
+			//log(`client ${path} responded with PONG`)
+			client.isAlive = true
 		})
 	})
 	return new WsServer(path, wsServer, clients)
@@ -80,10 +83,10 @@ const wsServerFactory = (path: string): WsServer => {
 
 const broadcast = (path: string) => {
 	log(`broadcasting: ${path}`)
-	return servers.get(path)?.clients.forEach(c => c.send('open'));
+	return servers.get(path)?.clients.forEach(c => c.send('open'))
 }
 
-const generateId = (): string => v4().substr(0, 8);
+const generateId = (): string => v4().substr(0, 8)
 
 const log = (message: any): void => console.log(`${new Date()} ${message.toString()}`)
 
@@ -98,4 +101,4 @@ setInterval(() => {
 			client.ping()
 		})
 	})
-}, 10 * 1000)
+}, 30 * 1000)
