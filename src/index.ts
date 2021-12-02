@@ -58,23 +58,24 @@ const wsServerFactory = (path: string): WsServer => {
 	const wsServer: WebSocket.Server = new WebSocket.Server({noServer: true})
 	let clients: Map<string, WebSocket> = new Map<string, WebSocket>()
 	wsServer.on('connection', (client: any) => {
-		log(`Client connected on: ${path}`)
 		client.isAlive = true
 		const id = generateId()
+		client.id = id
 		clients.set(id, client)
-		log(`Active connections on ${path}: ${clients.size}`)
+		log(`> Client connected @${client.id} on ${path}`)
+		log(`Active connections on ${path}: ${clients.size} { ${formatClientIds(clients)} }`)
 		client.on('message', (message: string) => log(message))
 		client.on('close', () => {
-			log(`Client disconnected: ${path}`)
+			log(`< Client disconnected: @${client.id} ${path}`)
 			clients.delete(id)
-			log(`Active connections: ${clients.size}`)
+			log(`Active connections: ${clients.size} { ${formatClientIds(clients)} }`)
 			if (clients.size === 0) {
 				log(`WsServer on ${path} has no clients, deleting`)
 				servers.delete(path)
 			}
 		})
 		client.on('pong', () => {
-			//log(`client ${path} responded with PONG`)
+			log(`Client @${client.id} ${path} responded with PONG`)
 			client.isAlive = true
 		})
 	})
@@ -86,19 +87,25 @@ const broadcast = (path: string) => {
 	return servers.get(path)?.clients.forEach(c => c.send('open'))
 }
 
-const generateId = (): string => v4().substr(0, 8)
+const generateId = (): string => v4().substr(0, 2)
 
-const log = (message: any): void => console.log(`${new Date()} ${message.toString()}`)
+const formatClientIds = (clients: Map<string, WebSocket>) =>
+	Array
+		.from(clients.values())
+		.map(c => (c as any).id)
+		.join(', ')
+
+const log = (message: any): void => console.log(`${new Date().toISOString()} ${message.toString()}`)
 
 setInterval(() => {
 	Array.from(servers.values()).forEach((wsServer: WsServer) => {
 		wsServer.clients.forEach((client: any) => {
 			if (client.isAlive === false) {
-				log(`no answer from client ${wsServer.path}, terminating...`)
+				log(`< No answer from client @${client.id} ${wsServer.path}, terminating...`)
 				client.terminate()
 			}
 			client.isAlive = false
 			client.ping()
 		})
 	})
-}, 30 * 1000)
+}, 10 * 1000)
