@@ -68,7 +68,6 @@ const wsServerFactory = (path: string): WsServer => {
 		client.on('close', () => {
 			log(`< Client disconnected: @${client.id} ${path}`)
 			clients.delete(id)
-			log(`Active connections: ${clients.size} { ${formatClientIds(clients)} }`)
 			if (clients.size === 0) {
 				log(`WsServer on ${path} has no clients, deleting`)
 				servers.delete(path)
