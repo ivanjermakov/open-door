@@ -46,7 +46,7 @@ httpServer.listen(HTTP_PORT)
 
 const server = httpServer.listen(WS_PORT)
 server.on('upgrade', (request, socket, head) => {
-	const path = url.parse(request.url).pathname
+	const path = url.parse(request.url!).pathname
 	const wsServer: WsServer = wsServerFactory(path!)
 	wsServer.server.handleUpgrade(request, socket, head, socket => {
 		wsServer.server.emit('connection', socket, request)
