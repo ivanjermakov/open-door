@@ -19,7 +19,12 @@ httpServer.get(`/status/:id`, basic, (request: Request, response: Response) => {
 	response
 		.status(200)
 		.json(
-			Array.from(servers.keys()).filter((path: string) => path.startsWith(`/${request.params.id}`))
+			Array.from(servers.entries())
+				.filter(([path,]: any) => path.startsWith(`/${request.params.id}`))
+				.map(([, s]) => s)
+				.map((s: WsServer) => Array.from(s.clients.keys()).map(id => s.path + '@' + id))
+				.flat()
+				.sort()
 		)
 })
 
@@ -55,9 +60,9 @@ const wsServerFactory = (path: string): WsServer => {
 		return existingServer
 	}
 
-	const wsServer: WebSocket.Server = new WebSocket.Server({noServer: true})
-	let clients: Map<string, WebSocket> = new Map<string, WebSocket>()
-	wsServer.on('connection', (client: any) => {
+	const wsServer: WsServer = servers.get(path) || new WsServer(path, new WebSocket.Server({noServer: true}), new Map())
+	let clients: Map<string, WebSocket> = wsServer.clients.size ? wsServer.clients : new Map<string, WebSocket>()
+	wsServer.server.on('connection', (client: any) => {
 		client.isAlive = true
 		const id = generateId()
 		client.id = id
@@ -78,7 +83,8 @@ const wsServerFactory = (path: string): WsServer => {
 			client.isAlive = true
 		})
 	})
-	return new WsServer(path, wsServer, clients)
+	wsServer.clients = clients
+	return wsServer
 }
 
 const broadcast = (path: string) => {
