@@ -10,6 +10,7 @@ const WS_PORT = 3001
 
 const httpServer = express()
 const servers: Map<string, WsServer> = new Map<string, WsServer>()
+const clients: Map<string, WebSocket> = new Map<string, WebSocket>()
 const basic = basicAuth({
 	users: {admin: 'admin'},
 	challenge: true
@@ -19,7 +20,7 @@ httpServer.get(`/status/:id`, basic, (request: Request, response: Response) => {
 	response
 		.status(200)
 		.json(
-			Array.from(servers.keys()).filter((path: string) => path.startsWith(`/${request.params.id}`))
+			Array.from(clients.values()).map((c: any) => `${c.path}@${c.id}`)
 		)
 })
 
@@ -56,11 +57,11 @@ const wsServerFactory = (path: string): WsServer => {
 	}
 
 	const wsServer: WebSocket.Server = new WebSocket.Server({noServer: true})
-	let clients: Map<string, WebSocket> = new Map<string, WebSocket>()
 	wsServer.on('connection', (client: any) => {
 		client.isAlive = true
 		const id = generateId()
 		client.id = id
+		client.path = path
 		clients.set(id, client)
 		log(`> Client connected @${client.id} on ${path}`)
 		log(`Active connections on ${path}: ${clients.size} { ${formatClientIds(clients)} }`)
